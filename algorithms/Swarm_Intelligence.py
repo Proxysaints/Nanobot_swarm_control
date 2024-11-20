@@ -17,9 +17,7 @@ class ParticleFilter:
     def update(self, measurement, sensor_noise):
         """ Update the particle weights based on the likelihood of each particle's position. """
         distances = np.linalg.norm(self.particles - measurement, axis=1)
-        # The sensor noise increases with distance from the target
-        sensor_noise_variation = sensor_noise * (1 + np.linalg.norm(measurement) / 10)  # more noise for far away
-        self.weights = np.exp(-distances**2 / (2 * sensor_noise_variation**2))  # Vectorized computation
+        self.weights = np.exp(-distances**2 / (2 * sensor_noise**2))  # Vectorized computation
         self.weights /= np.sum(self.weights)  # Normalize the weights
 
     def resample(self):
@@ -55,7 +53,7 @@ class KalmanFilter:
         self.state_estimate += np.dot(kalman_gain, innovation)
         self.state_cov = np.dot(np.eye(self.state_cov.shape[0]) - kalman_gain, self.state_cov)
 
-# PSO Class with vectorized operations and improved global command
+# PSO Class
 class PSO:
     def __init__(self, num_particles=10, target_position=None, state_dim=3):
         self.num_particles = num_particles
@@ -73,21 +71,17 @@ class PSO:
         cognitive_weight = 1.5
         social_weight = 1.5
 
-        # Calculate distances in parallel
         distances_to_target = np.linalg.norm(self.positions - self.target_position, axis=1)
         fitness_scores = distances_to_target
 
-        # Update personal bests and global best in parallel
         self.personal_best_scores = np.minimum(self.personal_best_scores, fitness_scores)
         self.personal_best_positions[fitness_scores < self.personal_best_scores] = self.positions[fitness_scores < self.personal_best_scores]
 
-        # Update global best position
         best_particle_idx = np.argmin(fitness_scores)
         if fitness_scores[best_particle_idx] < self.global_best_score:
             self.global_best_score = fitness_scores[best_particle_idx]
             self.global_best_position = self.positions[best_particle_idx]
 
-        # Vectorized PSO velocity and position update
         inertia = inertia_weight * self.velocities
         cognitive = cognitive_weight * np.random.rand(self.num_particles, self.state_dim) * (self.personal_best_positions - self.positions)
         social = social_weight * np.random.rand(self.num_particles, self.state_dim) * (self.global_best_position - self.positions)
@@ -98,7 +92,7 @@ class PSO:
     def get_best_position(self):
         return self.global_best_position
 
-# Nanobot Class with optimized position update
+# Nanobot Class
 class Nanobot:
     def __init__(self, position):
         self.position = np.array(position)
@@ -107,42 +101,57 @@ class Nanobot:
         """ Vectorized position update. """
         self.position += global_command * 0.5 + local_command * 0.5
 
-# Combined PF, KF, and PSO for Nanobot Swarm Control with Multithreading
+# SwarmControl Class
 class SwarmControl:
-    def __init__(self, num_particles=10, num_nanobots=5, target_position=None):
+    def __init__(self, num_particles=10, num_nanobots=5, initial_target_position=None):
         self.num_particles = num_particles
         self.num_nanobots = num_nanobots
-        self.pso = PSO(num_particles=num_particles, target_position=target_position)
+        self.target_position = np.array(initial_target_position)
+        self.pso = PSO(num_particles=num_particles, target_position=self.target_position)
         self.pf = ParticleFilter(num_particles=num_particles)
         self.kf = KalmanFilter()
         self.nanobots = [Nanobot(position=np.random.uniform(-1, 1, 3)) for _ in range(num_nanobots)]
 
-    def update(self):
+    def update_target(self, step):
+        """ Update the target position dynamically (e.g., sinusoidal trajectory). """
+        self.target_position += np.sin(0.1 * step) * np.random.uniform(-0.1, 0.1, self.target_position.shape)
+        self.pso.target_position = self.target_position
+
+    def adaptive_sensor_noise(self, nanobot_position):
+        """ Adjust noise based on proximity to the target. """
+        distance_to_target = np.linalg.norm(nanobot_position - self.target_position)
+        return max(0.1, 1.0 / (1 + distance_to_target))  # Noise decreases with proximity
+
+    def update(self, step):
+        # Update the target position
+        self.update_target(step)
+
         # Update PSO for swarm optimization
         self.pso.update()
 
-        # Parallelizing Particle Filter and Kalman Filter updates using ThreadPoolExecutor
+        # Parallel updates for PF and KF
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(self.update_nanobot_position, nanobot) for nanobot in self.nanobots]
             for future in futures:
                 future.result()
 
-        # Update each nanobot's position using global and local commands
+        # Update each nanobot's position
         global_command = self.pso.get_best_position()
-        local_commands = np.random.uniform(-1, 1, (self.num_nanobots, 3))  # Random local commands for each nanobot
+        local_commands = np.random.uniform(-1, 1, (self.num_nanobots, 3))  # Random local commands
         for i, nanobot in enumerate(self.nanobots):
             nanobot.update_position(global_command, local_commands[i])
 
     def update_nanobot_position(self, nanobot):
         pf_measurement = nanobot.position  # Use the current position as a measurement
+        sensor_noise = self.adaptive_sensor_noise(nanobot.position)
+
         self.pf.predict()
-        self.pf.update(pf_measurement, sensor_noise=0.1)
+        self.pf.update(pf_measurement, sensor_noise)
         self.pf.resample()
 
         self.kf.predict()
         self.kf.update(pf_measurement)
 
-        # Combining PF and KF estimates
         estimated_position = (self.pf.estimate_position() + self.kf.state_estimate) / 2
         nanobot.position = estimated_position
 
@@ -151,10 +160,12 @@ class SwarmControl:
 
 # Main execution loop
 if __name__ == "__main__":
-    target_position = np.array([0, 0, 0])
-    swarm_control = SwarmControl(num_particles=10, num_nanobots=5, target_position=target_position)
+    initial_target_position = np.array([0, 0, 0])
+    swarm_control = SwarmControl(num_particles=10, num_nanobots=5, initial_target_position=initial_target_position)
 
-    # Main loop (simulate multiple updates)
-    for _ in range(10):  # Update for 10 iterations
-        swarm_control.update()  # Update nanobots' positions using PSO, PF, and KF
+    # Main loop
+    for step in range(20):  # Simulate 20 iterations
+        swarm_control.update(step)
+        print(f"Step {step}:")
+        print("Target Position:", swarm_control.target_position)
         print("Nanobot Positions:", swarm_control.get_nanobot_positions())

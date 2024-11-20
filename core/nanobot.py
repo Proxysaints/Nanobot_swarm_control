@@ -1,0 +1,1 @@
+( empty file for Magnetic,Light,Acoustic,Chemical,DNA nanobots ) program is for magnetic nanobots although it may be expanded to incorporate the rest of the nanobots 

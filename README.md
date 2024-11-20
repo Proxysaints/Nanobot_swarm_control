@@ -1,4 +1,4 @@
-README for Nanobot Simulation and Control System
+README: Nanobot Simulation and Control System
 
 Overview
 

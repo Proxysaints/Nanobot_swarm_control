@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # Initialize the Nanobot Manager with Magnetic Sensing
     nanobot_manager = NanobotManagerWithMagneticSensing(position_system, tracker, field_source_position)
 
-    # Add nanobots with sensor systems
+    # Add nanobots with sensor systems and Particle Filter
     for i in range(5):
         # Create a Magnetic Nanobot with random initial positions
         nanobot = MagneticNanobot(position=[np.random.uniform(-1, 1), np.random.uniform(-1, 1), np.random.uniform(-1, 1)])
@@ -56,6 +56,10 @@ if __name__ == "__main__":
         magnetometer, temperature_sensor = setup_sensor_system()
         nanobot.magnetometer = magnetometer
         nanobot.temperature_sensor = temperature_sensor
+
+        # Set up the Particle Filter with Magnetic Sensing (MGS)
+        particle_filter = ParticleFilterWithMGS()
+        nanobot.particle_filter = particle_filter
 
         # Add nanobot to the manager
         nanobot_manager.add_nanobot(nanobot)
@@ -75,8 +79,8 @@ if __name__ == "__main__":
         # Use hybrid controller to update nanobots' positions
         hybrid_controller.update(nanobot_manager, hybrid_controller)
 
-        # Get the positions of all nanobots
-        positions = nanobot_manager.get_positions()
+        # Get the positions of all nanobots from Particle Filter estimates
+        positions = nanobot_manager.get_positions_using_particle_filter()
 
         # Clear the current plot
         ax.cla()

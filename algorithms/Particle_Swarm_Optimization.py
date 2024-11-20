@@ -1,7 +1,7 @@
 import numpy as np
 import concurrent.futures
 
-# Particle Filter Class with parallelization
+# Particle Filter Class
 class ParticleFilter:
     def __init__(self, num_particles=100, state_dim=3, noise_cov=0.1):
         self.num_particles = num_particles
@@ -9,11 +9,10 @@ class ParticleFilter:
         self.particles = np.random.uniform(-1, 1, (self.num_particles, self.state_dim))
         self.weights = np.ones(self.num_particles) / self.num_particles
         self.noise_cov = noise_cov
-    
+
     def predict(self):
         """ Predict the next state of each particle by adding noise. """
-        noise = np.random.normal(0, self.noise_cov, self.particles.shape)
-        self.particles += noise
+        self.particles += np.random.normal(0, self.noise_cov, self.particles.shape)
 
     def update(self, measurement, sensor_noise):
         """ Update the particle weights based on the likelihood of each particle's position. """
@@ -33,7 +32,7 @@ class ParticleFilter:
         """ Estimate the current position as the weighted average of the particles. """
         return np.average(self.particles, weights=self.weights, axis=0)
 
-# Kalman Filter Class with parallelization
+# Kalman Filter Class
 class KalmanFilter:
     def __init__(self, state_dim=3, process_cov=0.1, measurement_cov=0.1):
         self.state_estimate = np.zeros(state_dim)
@@ -43,15 +42,15 @@ class KalmanFilter:
 
     def predict(self):
         """ Kalman filter prediction step (no control input). """
-        self.state_cov = self.state_cov + self.process_cov
+        self.state_cov += self.process_cov
 
     def update(self, measurement):
         """ Kalman update step based on measurement. """
         innovation = measurement - self.state_estimate
         innovation_cov = self.state_cov + self.measurement_cov
         kalman_gain = np.dot(self.state_cov, np.linalg.inv(innovation_cov))
-        
-        self.state_estimate = self.state_estimate + np.dot(kalman_gain, innovation)
+
+        self.state_estimate += np.dot(kalman_gain, innovation)
         self.state_cov = np.dot(np.eye(self.state_cov.shape[0]) - kalman_gain, self.state_cov)
 
 # PSO Class with vectorized operations
@@ -81,11 +80,11 @@ class PSO:
             if fitness_scores[i] < self.personal_best_scores[i]:
                 self.personal_best_scores[i] = fitness_scores[i]
                 self.personal_best_positions[i] = self.positions[i]
-            
+
             if fitness_scores[i] < self.global_best_score:
                 self.global_best_score = fitness_scores[i]
                 self.global_best_position = self.positions[i]
-        
+
         # Vectorized PSO velocity and position update
         inertia = inertia_weight * self.velocities
         cognitive = cognitive_weight * np.random.rand(self.num_particles, self.state_dim) * (self.personal_best_positions - self.positions)
@@ -122,10 +121,7 @@ class SwarmControl:
 
         # Parallelizing Particle Filter and Kalman Filter updates
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = []
-            for nanobot in self.nanobots:
-                futures.append(executor.submit(self.update_nanobot_position, nanobot))
-            # Wait for all tasks to complete
+            futures = [executor.submit(self.update_nanobot_position, nanobot) for nanobot in self.nanobots]
             for future in futures:
                 future.result()
 
@@ -136,7 +132,7 @@ class SwarmControl:
             nanobot.update_position(global_command, local_commands[i])
 
     def update_nanobot_position(self, nanobot):
-        pf_measurement = np.random.normal(nanobot.position, 0.1)
+        pf_measurement = nanobot.position  # Use the current position as a measurement
         self.pf.predict()
         self.pf.update(pf_measurement, sensor_noise=0.1)
         self.pf.resample()

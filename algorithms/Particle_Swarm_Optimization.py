@@ -17,7 +17,9 @@ class ParticleFilter:
     def update(self, measurement, sensor_noise):
         """ Update the particle weights based on the likelihood of each particle's position. """
         distances = np.linalg.norm(self.particles - measurement, axis=1)
-        self.weights = np.exp(-distances**2 / (2 * sensor_noise**2))  # Vectorized computation
+        # The sensor noise increases with distance from the target
+        sensor_noise_variation = sensor_noise * (1 + np.linalg.norm(measurement) / 10)  # more noise for far away
+        self.weights = np.exp(-distances**2 / (2 * sensor_noise_variation**2))  # Vectorized computation
         self.weights /= np.sum(self.weights)  # Normalize the weights
 
     def resample(self):
@@ -53,7 +55,7 @@ class KalmanFilter:
         self.state_estimate += np.dot(kalman_gain, innovation)
         self.state_cov = np.dot(np.eye(self.state_cov.shape[0]) - kalman_gain, self.state_cov)
 
-# PSO Class with vectorized operations
+# PSO Class with vectorized operations and improved global command
 class PSO:
     def __init__(self, num_particles=10, target_position=None, state_dim=3):
         self.num_particles = num_particles
@@ -76,14 +78,14 @@ class PSO:
         fitness_scores = distances_to_target
 
         # Update personal bests and global best in parallel
-        for i in range(self.num_particles):
-            if fitness_scores[i] < self.personal_best_scores[i]:
-                self.personal_best_scores[i] = fitness_scores[i]
-                self.personal_best_positions[i] = self.positions[i]
+        self.personal_best_scores = np.minimum(self.personal_best_scores, fitness_scores)
+        self.personal_best_positions[fitness_scores < self.personal_best_scores] = self.positions[fitness_scores < self.personal_best_scores]
 
-            if fitness_scores[i] < self.global_best_score:
-                self.global_best_score = fitness_scores[i]
-                self.global_best_position = self.positions[i]
+        # Update global best position
+        best_particle_idx = np.argmin(fitness_scores)
+        if fitness_scores[best_particle_idx] < self.global_best_score:
+            self.global_best_score = fitness_scores[best_particle_idx]
+            self.global_best_position = self.positions[best_particle_idx]
 
         # Vectorized PSO velocity and position update
         inertia = inertia_weight * self.velocities
@@ -105,7 +107,7 @@ class Nanobot:
         """ Vectorized position update. """
         self.position += global_command * 0.5 + local_command * 0.5
 
-# Combined PF, KF, and PSO for Nanobot Swarm Control
+# Combined PF, KF, and PSO for Nanobot Swarm Control with Multithreading
 class SwarmControl:
     def __init__(self, num_particles=10, num_nanobots=5, target_position=None):
         self.num_particles = num_particles
@@ -119,7 +121,7 @@ class SwarmControl:
         # Update PSO for swarm optimization
         self.pso.update()
 
-        # Parallelizing Particle Filter and Kalman Filter updates
+        # Parallelizing Particle Filter and Kalman Filter updates using ThreadPoolExecutor
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(self.update_nanobot_position, nanobot) for nanobot in self.nanobots]
             for future in futures:

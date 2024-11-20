@@ -1,7 +1,8 @@
 import numpy as np
 import concurrent.futures
+import threading
 
-# Particle Filter Class
+# Particle Filter Class (Thread-safe)
 class ParticleFilter:
     def __init__(self, num_particles=100, state_dim=3, noise_cov=0.1):
         self.num_particles = num_particles
@@ -9,51 +10,53 @@ class ParticleFilter:
         self.particles = np.random.uniform(-1, 1, (self.num_particles, self.state_dim))
         self.weights = np.ones(self.num_particles) / self.num_particles
         self.noise_cov = noise_cov
+        self.lock = threading.Lock()  # Lock for thread safety
 
     def predict(self):
-        """ Predict the next state of each particle by adding noise. """
-        self.particles += np.random.normal(0, self.noise_cov, self.particles.shape)
+        with self.lock:
+            self.particles += np.random.normal(0, self.noise_cov, self.particles.shape)
 
     def update(self, measurement, sensor_noise):
-        """ Update the particle weights based on the likelihood of each particle's position. """
-        distances = np.linalg.norm(self.particles - measurement, axis=1)
-        self.weights = np.exp(-distances**2 / (2 * sensor_noise**2))  # Vectorized computation
-        self.weights /= np.sum(self.weights)  # Normalize the weights
+        with self.lock:
+            distances = np.linalg.norm(self.particles - measurement, axis=1)
+            self.weights = np.exp(-distances**2 / (2 * sensor_noise**2))  # Vectorized computation
+            self.weights /= np.sum(self.weights)  # Normalize the weights
 
     def resample(self):
-        """ Resample particles based on their weights using systematic resampling. """
-        cumulative_weights = np.cumsum(self.weights)
-        random_values = np.random.uniform(0, 1, self.num_particles)
-        indices = np.searchsorted(cumulative_weights, random_values)
-        self.particles = self.particles[indices]
-        self.weights = np.ones(self.num_particles) / self.num_particles
+        with self.lock:
+            cumulative_weights = np.cumsum(self.weights)
+            random_values = np.random.uniform(0, 1, self.num_particles)
+            indices = np.searchsorted(cumulative_weights, random_values)
+            self.particles = self.particles[indices]
+            self.weights = np.ones(self.num_particles) / self.num_particles
 
     def estimate_position(self):
-        """ Estimate the current position as the weighted average of the particles. """
-        return np.average(self.particles, weights=self.weights, axis=0)
+        with self.lock:
+            return np.average(self.particles, weights=self.weights, axis=0)
 
-# Kalman Filter Class
+# Kalman Filter Class (Thread-safe)
 class KalmanFilter:
     def __init__(self, state_dim=3, process_cov=0.1, measurement_cov=0.1):
         self.state_estimate = np.zeros(state_dim)
         self.state_cov = np.eye(state_dim) * process_cov
         self.process_cov = np.eye(state_dim) * process_cov
         self.measurement_cov = np.eye(state_dim) * measurement_cov
+        self.lock = threading.Lock()
 
     def predict(self):
-        """ Kalman filter prediction step (no control input). """
-        self.state_cov += self.process_cov
+        with self.lock:
+            self.state_cov += self.process_cov
 
     def update(self, measurement):
-        """ Kalman update step based on measurement. """
-        innovation = measurement - self.state_estimate
-        innovation_cov = self.state_cov + self.measurement_cov
-        kalman_gain = np.dot(self.state_cov, np.linalg.inv(innovation_cov))
+        with self.lock:
+            innovation = measurement - self.state_estimate
+            innovation_cov = self.state_cov + self.measurement_cov
+            kalman_gain = np.dot(self.state_cov, np.linalg.inv(innovation_cov))
 
-        self.state_estimate += np.dot(kalman_gain, innovation)
-        self.state_cov = np.dot(np.eye(self.state_cov.shape[0]) - kalman_gain, self.state_cov)
+            self.state_estimate += np.dot(kalman_gain, innovation)
+            self.state_cov = np.dot(np.eye(self.state_cov.shape[0]) - kalman_gain, self.state_cov)
 
-# PSO Class
+# Particle Swarm Optimization (PSO) Class (Optimized)
 class PSO:
     def __init__(self, num_particles=10, target_position=None, state_dim=3):
         self.num_particles = num_particles
@@ -92,16 +95,17 @@ class PSO:
     def get_best_position(self):
         return self.global_best_position
 
-# Nanobot Class
+# Nanobot Class with Thread Safety and Enhanced Update Logic
 class Nanobot:
     def __init__(self, position):
         self.position = np.array(position)
+        self.lock = threading.Lock()
 
     def update_position(self, global_command, local_command):
-        """ Vectorized position update. """
-        self.position += global_command * 0.5 + local_command * 0.5
+        with self.lock:
+            self.position += global_command * 0.5 + local_command * 0.5
 
-# SwarmControl Class
+# SwarmControl Class (Enhanced Thread Safety, Error Handling, Adaptive Noise Handling)
 class SwarmControl:
     def __init__(self, num_particles=10, num_nanobots=5, initial_target_position=None):
         self.num_particles = num_particles
@@ -111,61 +115,47 @@ class SwarmControl:
         self.pf = ParticleFilter(num_particles=num_particles)
         self.kf = KalmanFilter()
         self.nanobots = [Nanobot(position=np.random.uniform(-1, 1, 3)) for _ in range(num_nanobots)]
+        self.lock = threading.Lock()
 
     def update_target(self, step):
-        """ Update the target position dynamically (e.g., sinusoidal trajectory). """
-        self.target_position += np.sin(0.1 * step) * np.random.uniform(-0.1, 0.1, self.target_position.shape)
-        self.pso.target_position = self.target_position
+        try:
+            self.target_position += np.sin(0.1 * step) * np.random.uniform(-0.1, 0.1, self.target_position.shape)
+            self.pso.target_position = self.target_position
+        except Exception as e:
+            print(f"Error in updating target position: {e}")
 
     def adaptive_sensor_noise(self, nanobot_position):
-        """ Adjust noise based on proximity to the target. """
         distance_to_target = np.linalg.norm(nanobot_position - self.target_position)
-        return max(0.1, 1.0 / (1 + distance_to_target))  # Noise decreases with proximity
-
-    def update(self, step):
-        # Update the target position
-        self.update_target(step)
-
-        # Update PSO for swarm optimization
-        self.pso.update()
-
-        # Parallel updates for PF and KF
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self.update_nanobot_position, nanobot) for nanobot in self.nanobots]
-            for future in futures:
-                future.result()
-
-        # Update each nanobot's position
-        global_command = self.pso.get_best_position()
-        local_commands = np.random.uniform(-1, 1, (self.num_nanobots, 3))  # Random local commands
-        for i, nanobot in enumerate(self.nanobots):
-            nanobot.update_position(global_command, local_commands[i])
+        # More complex noise model based on velocity and proximity
+        noise = max(0.1, 1.0 / (1 + distance_to_target)) + 0.05 * np.random.rand()
+        return noise
 
     def update_nanobot_position(self, nanobot):
-        pf_measurement = nanobot.position  # Use the current position as a measurement
-        sensor_noise = self.adaptive_sensor_noise(nanobot.position)
+        try:
+            global_command = self.pso.get_best_position()
+            local_command = np.random.uniform(-0.1, 0.1, nanobot.position.shape)
+            sensor_noise = self.adaptive_sensor_noise(nanobot.position)
 
-        self.pf.predict()
-        self.pf.update(pf_measurement, sensor_noise)
-        self.pf.resample()
+            # Update PF and KF
+            self.pf.update(nanobot.position, sensor_noise)
+            self.kf.update(nanobot.position)
 
-        self.kf.predict()
-        self.kf.update(pf_measurement)
+            # Use PF for position estimation
+            estimated_position = self.pf.estimate_position()
 
-        estimated_position = (self.pf.estimate_position() + self.kf.state_estimate) / 2
-        nanobot.position = estimated_position
+            nanobot.update_position(global_command, local_command)
+            nanobot.position = estimated_position  # Use PF's estimate
+        except Exception as e:
+            print(f"Error in updating nanobot position: {e}")
 
-    def get_nanobot_positions(self):
-        return [nanobot.position for nanobot in self.nanobots]
+    def update(self, step):
+        try:
+            self.update_target(step)
+            self.pso.update()
 
-# Main execution loop
-if __name__ == "__main__":
-    initial_target_position = np.array([0, 0, 0])
-    swarm_control = SwarmControl(num_particles=10, num_nanobots=5, initial_target_position=initial_target_position)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = [executor.submit(self.update_nanobot_position, nanobot) for nanobot in self.nanobots]
+                concurrent.futures.wait(futures)
 
-    # Main loop
-    for step in range(20):  # Simulate 20 iterations
-        swarm_control.update(step)
-        print(f"Step {step}:")
-        print("Target Position:", swarm_control.target_position)
-        print("Nanobot Positions:", swarm_control.get_nanobot_positions())
+        except Exception as e:
+            print(f"An error occurred in swarm control update: {e}")

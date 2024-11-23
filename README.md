@@ -32,13 +32,12 @@ pip install -r requirements.txt
 
 python main.py
 
-
+---
 Future Improvements:
+---
     Power management and energy models.
     Swarm coordination and communication.
-    Integration of more advanced neural network models.
-    
----
+    Integration of more advanced neural network models.    
 
 For more details, check out the repository: Nanobot Swarm Control.
 

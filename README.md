@@ -36,14 +36,8 @@ python main.py
 
 Future Improvements
 
-Swarm coordination and communication.
+    Swarm coordination and communication.
 
-Power management and energy models.
+    Power management and energy models.
 
-Integration of more advanced neural network models.
-
-
-
----
-
-For more details, check out the repository: Nanobot Swarm Control.
+    Integration of more advanced neural network models.

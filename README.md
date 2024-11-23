@@ -1,5 +1,5 @@
 
-             Nanobot Swarm Control
+            NANOBOT SWARM CONTROL
 
 Overview:
 

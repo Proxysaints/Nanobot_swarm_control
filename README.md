@@ -1,10 +1,10 @@
 Nanobot Swarm Control
 ---
-##Overview
+**OVERVIEW:**
 
 This project simulates the control of various nanobot types using AI models like neural networks and particle filters. It supports both simulated and real-world data for positioning and sensors, demonstrating applications in fields like medical treatments and brain-computer interfaces (BCI). The simulation visualizes nanobot movements in 3D and includes models for Magnetic, Light-activated, Acoustic, Chemical, and DNA-based nanobots.
 
-##Features
+**FEATURES:**
 
 Nanobot Types: Magnetic, Light-activated, Acoustic, Chemical, DNA-based.
 
@@ -16,7 +16,7 @@ Applications: Computational Neuroscience, Brain-Computer Interfaces, Cognitive E
 
 
 
-##Installation
+**INSTALLATION:**
 
 1. Clone the repository:
 2. git clone https://github.com/Proxysaints/Nanobot_swarm_control.git
@@ -34,5 +34,5 @@ Future Improvements:
     Swarm coordination and communication.
     Integration of more advanced neural network models.    
 
-For more details, check out the repository: NANOBOT SWARM CONTROL
+For more details, check out the repository: **NANOBOT SWARM CONTROL**
 

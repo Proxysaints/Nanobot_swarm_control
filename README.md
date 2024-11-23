@@ -27,7 +27,6 @@ Installation:
 git clone https://github.com/Proxysaints/Nanobot_swarm_control.git
 cd Nanobot_swarm_control
 
-
 2. Install dependencies:
 
 pip install -r requirements.txt

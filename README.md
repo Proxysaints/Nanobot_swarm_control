@@ -2,8 +2,8 @@
              NANOBOT SWARM CONTROL
 
 Overview:
-
-This project simulates the control of various nanobot types using AI models like neural networks and particle filters. It supports both simulated and real-world data for positioning and sensors, demonstrating applications in fields like medical treatments and brain-computer interfaces (BCI). The simulation visualizes nanobot movements in 3D and includes models for Magnetic, Light-activated, Acoustic, Chemical, and DNA-based nanobots.
+   This project simulates the control of.
+various nanobot types using AI models like neural networks and particle filters. It supports both simulated and real-world data for positioning and sensors, demonstrating applications in fields like medical treatments and brain-computer interfaces (BCI). The simulation visualizes nanobot movements in 3D and includes models for Magnetic, Light-activated, Acoustic, Chemical, and DNA-based nanobots.
 
 
 

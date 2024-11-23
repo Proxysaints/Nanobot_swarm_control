@@ -32,6 +32,3 @@ Future Improvements:
     Power management and energy models.
     Swarm coordination and communication.
     Integration of more advanced neural network models.    
-
-**NANOBOT SWARM CONTROL**
-

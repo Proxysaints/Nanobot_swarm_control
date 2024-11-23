@@ -1,7 +1,3 @@
-Here's a draft for the README based on the content of the repository:
-
-
----
 
              Nanobot Swarm Control
 

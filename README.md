@@ -15,22 +15,17 @@ Real-time Tracking: 3D visualization of nanobot positions.
 Applications: Computational Neuroscience, Brain-Computer Interfaces, Cognitive Enhancement.
 
 
+
 Installation
 
 1. Clone the repository:
-
-git clone https://github.com/Proxysaints/Nanobot_swarm_control.git
+2. git clone https://github.com/Proxysaints/Nanobot_swarm_control.git
 cd Nanobot_swarm_control
-
-
-2. Install dependencies:
-
+3. Install dependencies:
 pip install -r requirements.txt
-
-
 3. Run the simulation:
-
 python main.py
+
 
 ---
 Future Improvements:

@@ -18,8 +18,7 @@ Applications: Computational Neuroscience, Brain-Computer Interfaces, Cognitive E
 
 **INSTALLATION:**
 
-1. Clone the repository
-2. git clone https://github.com/Proxysaints/Nanobot_swarm_control.git
+1. Clone the repository; git clone https://github.com/Proxysaints/Nanobot_swarm_control.git
 cd Nanobot_swarm_control
 3. Install dependencies:
 pip install -r requirements.txt

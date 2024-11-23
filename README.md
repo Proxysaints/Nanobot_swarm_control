@@ -33,5 +33,5 @@ Future Improvements:
     Swarm coordination and communication.
     Integration of more advanced neural network models.    
 
-check out the repository: **NANOBOT SWARM CONTROL**
+**NANOBOT SWARM CONTROL**
 

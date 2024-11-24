@@ -1,42 +1,8 @@
 import numpy as np
 import time
-import gps
-import smbus
 from w1thermsensor import W1ThermSensor
+import smbus
 from particle_filter import ParticleFilter  # Assuming you have the ParticleFilter class defined elsewhere
-import serial
-
-# ------------------- GPS Integration -------------------
-
-class RealGpsPositioningSystem:
-    def __init__(self):
-        self.session = gps.gps(mode=gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
-
-    def update_position(self):
-        try:
-            self.session.next()  # Get the latest GPS data
-            if self.session.fix.mode >= 2:  # Check if there's a valid 2D or 3D fix
-                latitude = self.session.fix.latitude
-                longitude = self.session.fix.longitude
-                altitude = self.session.fix.altitude
-                return np.array([latitude, longitude, altitude])
-            else:
-                print("No valid GPS fix.")
-                return None  # Return None to signal invalid data
-        except Exception as e:
-            print(f"GPS Error: {e}")
-            return None
-
-
-class SimulatedGpsPositioningSystem:
-    def __init__(self):
-        self.position = np.array([0.0, 0.0, 0.0])
-
-    def update_position(self):
-        # Simulate movement in a fixed direction
-        self.position += np.random.normal(0, 0.01, size=3)
-        return self.position
-
 
 # ------------------- Magnetic Gradient Sensor -------------------
 
@@ -133,7 +99,7 @@ class MagneticNanobot:
         magnetic_field, gradient = self.sense_magnetic_field(field_source_position)
         move_direction = gradient * 0.1
         return move_direction
-    
+
     def update_temperature(self):
         self.temperature = self.temperature_sensor.get_temperature()
 
@@ -141,9 +107,8 @@ class MagneticNanobot:
 # ------------------- Nanobot Manager with Magnetic Sensing -------------------
 
 class NanobotManagerWithMagneticSensing:
-    def __init__(self, position_system, tracker, field_source_position=None, ambient_temperature=25.0):
+    def __init__(self, tracker, field_source_position=None, ambient_temperature=25.0):
         self.nanobots = []
-        self.position_system = position_system
         self.tracker = tracker
         self.field_source_position = field_source_position
         self.pf = ParticleFilterWithMGS(num_particles=100)
@@ -162,7 +127,8 @@ class NanobotManagerWithMagneticSensing:
 
         # Update Particle Filter (PF)
         for nanobot in self.nanobots:
-            pf_measurement = self.position_system.update_position()  # Real GPS data
+            # Using simulated position as a measurement instead of GPS data
+            pf_measurement = nanobot.position
             self.pf.predict()
             self.pf.update(pf_measurement, sensor_noise=0.1, field_source_position=self.field_source_position, temperature=self.ambient_temperature)
             self.pf.resample()
@@ -183,15 +149,10 @@ class NanobotManagerWithMagneticSensing:
 if __name__ == "__main__":
     use_simulation = True  # Toggle this for real or simulated mode
 
-    if use_simulation:
-        position_system = SimulatedGpsPositioningSystem()
-        tracker = None  # Add or simulate a tracker if needed
-        field_source_position = np.array([0, 0, 0])
-    else:
-        position_system = RealGpsPositioningSystem()
-        tracker = None  # Replace with actual tracker (e.g., Tracking3D)
+    tracker = None  # Replace with actual tracker (e.g., Tracking3D) if needed
+    field_source_position = np.array([0, 0, 0])
 
-    nanobot_manager = NanobotManagerWithMagneticSensing(position_system, tracker, field_source_position)
+    nanobot_manager = NanobotManagerWithMagneticSensing(tracker, field_source_position)
 
     # Add nanobots
     for _ in range(5):

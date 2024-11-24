@@ -3,7 +3,9 @@ import socket
 import random
 import json
 import logging
-import psutil  # For getting real Wi-Fi signal strength
+import psutil
+import asyncio
+import zlib
 from datetime import datetime
 
 # Configure logging
@@ -15,15 +17,19 @@ class WiFiModule:
         self.module_name = module_name
         self.host = host
         self.port = port
-        self.sock = None
+        self.reader = None
+        self.writer = None
 
-    def connect(self):
+    async def connect(self):
+        """Asynchronous connection method to be implemented by subclasses."""
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def send_signal(self, signal_data):
+    async def send_signal(self, signal_data):
+        """Asynchronously send signal data to the server."""
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def receive_signal(self):
+    async def receive_signal(self):
+        """Asynchronously receive signal data from the server."""
         raise NotImplementedError("Subclasses should implement this method.")
 
 class Signal:
@@ -44,13 +50,8 @@ class Signal:
 
 # Get real signal strength (for example using psutil)
 def get_real_signal_strength():
-    # This assumes you're on a system that psutil can access Wi-Fi signal strength.
-    # The `psutil` library doesn't directly provide Wi-Fi signal strength,
-    # but you can use `psutil.net_if_stats()` to check network stats and signal
-    # info if available on certain systems.
     try:
         wireless_info = psutil.net_if_stats()
-        # Check for Wi-Fi interface (replace 'wlan0' with the correct interface on your system)
         if 'wlan0' in wireless_info:
             return random.uniform(0.5, 1.0)  # Simulating signal strength for now
         else:
@@ -58,109 +59,92 @@ def get_real_signal_strength():
             return random.uniform(0.5, 1.0)
     except Exception as e:
         logging.error(f"Error getting signal strength: {e}")
-        return random.uniform(0.5, 1.0)  # Fallback to random value if real signal can't be fetched
+        return random.uniform(0.5, 1.0)  # Fallback to random value
 
-class ESP8266(WiFiModule):
+class AsyncWiFiModule(WiFiModule):
+    async def connect(self):
+        self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+        logging.info(f"Connected to {self.host}:{self.port} via {self.module_name}")
+
+    async def send_signal(self, signal_data):
+        signal_json = signal_data.to_json()
+        compressed_signal = compress_signal(signal_json)  # Compress the signal data before sending
+        self.writer.write(compressed_signal)
+        await self.writer.drain()
+        logging.info(f"Sent signal: {signal_json}")
+
+    async def receive_signal(self):
+        try:
+            data = await self.reader.read(1024)
+            if data:
+                decompressed_data = decompress_signal(data)
+                logging.info(f"Received signal: {decompressed_data}")
+        except Exception as e:
+            logging.error(f"Error receiving data: {e}")
+
+class ESP8266(AsyncWiFiModule):
     def __init__(self, host, port):
         super().__init__("ESP8266", host, port)
 
-    def connect(self):
-        try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(10)
-            self.sock.connect((self.host, self.port))
-            logging.info(f"Connected to {self.host}:{self.port} via ESP8266")
-        except Exception as e:
-            logging.error(f"Connection failed: {e}")
-
-    def send_signal(self, signal_data):
-        if self.sock:
-            signal_json = signal_data.to_json()
-            self.sock.send(signal_json.encode('utf-8'))
-            logging.info(f"Sent signal: {signal_json}")
-        else:
-            logging.warning("No connection established.")
-
-    def receive_signal(self):
-        try:
-            if self.sock:
-                data = self.sock.recv(1024).decode('utf-8')
-                if data:
-                    logging.info(f"Received signal: {data}")
-                    return data
-                else:
-                    logging.warning("No data received.")
-            else:
-                logging.warning("No connection established.")
-        except Exception as e:
-            logging.error(f"Error receiving data: {e}")
-
-class ESP32(WiFiModule):
+class ESP32(AsyncWiFiModule):
     def __init__(self, host, port):
         super().__init__("ESP32", host, port)
 
-    def connect(self):
+async def send_with_retry(module, signal_data, retries=3):
+    for attempt in range(retries):
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(10)
-            self.sock.connect((self.host, self.port))
-            logging.info(f"Connected to {self.host}:{self.port} via ESP32")
+            await module.send_signal(signal_data)
+            return True
         except Exception as e:
-            logging.error(f"Connection failed: {e}")
+            logging.error(f"Send attempt {attempt + 1} failed: {e}")
+            await asyncio.sleep(2 ** attempt)
+    logging.error("All retries failed.")
+    return False
 
-    def send_signal(self, signal_data):
-        if self.sock:
-            signal_json = signal_data.to_json()
-            self.sock.send(signal_json.encode('utf-8'))
-            logging.info(f"Sent signal: {signal_json}")
-        else:
-            logging.warning("No connection established.")
+def compress_signal(data):
+    """Compress the signal data."""
+    return zlib.compress(data.encode('utf-8'))
 
-    def receive_signal(self):
-        try:
-            if self.sock:
-                data = self.sock.recv(1024).decode('utf-8')
-                if data:
-                    logging.info(f"Received signal: {data}")
-                    return data
-                else:
-                    logging.warning("No data received.")
-            else:
-                logging.warning("No connection established.")
-        except Exception as e:
-            logging.error(f"Error receiving data: {e}")
+def decompress_signal(data):
+    """Decompress the signal data."""
+    return zlib.decompress(data).decode('utf-8')
 
-if __name__ == "__main__":
+async def main():
     host = '192.168.1.100'
     port = 8080
 
     esp8266 = ESP8266(host, port)
     esp32 = ESP32(host, port)
 
-    try:
-        esp8266.connect()
-        esp32.connect()
+    await esp8266.connect()
+    await esp32.connect()
 
+    try:
         while True:
             # Fetch real signal strength
             signal_strength = get_real_signal_strength()
-
             signal_data = Signal(signal_strength)
 
-            esp8266.send_signal(signal_data)
-            esp32.send_signal(signal_data)
+            # Send signals with retry mechanism
+            await send_with_retry(esp8266, signal_data)
+            await send_with_retry(esp32, signal_data)
 
-            esp8266.receive_signal()
-            esp32.receive_signal()
+            # Receive signals (asynchronous)
+            await esp8266.receive_signal()
+            await esp32.receive_signal()
 
-            time.sleep(2)
+            await asyncio.sleep(2)
 
     except KeyboardInterrupt:
         logging.info("Communication interrupted by user.")
 
     finally:
-        if esp8266.sock:
-            esp8266.sock.close()
-        if esp32.sock:
-            esp32.sock.close()
+        # Cleanup and close connections
+        if esp8266.writer:
+            esp8266.writer.close()
+        if esp32.writer:
+            esp32.writer.close()
         logging.info("Connections closed.")
+
+if __name__ == "__main__":
+    asyncio.run(main())

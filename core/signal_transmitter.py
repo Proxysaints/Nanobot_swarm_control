@@ -90,6 +90,34 @@ class ESP32(AsyncWiFiModule):
     def __init__(self, host, port):
         super().__init__("ESP32", host, port)
 
+class ConnectionPool:
+    def __init__(self, host, port, pool_size=2):
+        self.host = host
+        self.port = port
+        self.pool_size = pool_size
+        self.pool = []
+        self._initialize_pool()
+
+    def _initialize_pool(self):
+        """Initialize the pool with Wi-Fi modules."""
+        for _ in range(self.pool_size):
+            esp8266 = ESP8266(self.host, self.port)
+            esp32 = ESP32(self.host, self.port)
+            self.pool.append(esp8266)
+            self.pool.append(esp32)
+
+    async def get_connection(self):
+        """Get a connection from the pool."""
+        for connection in self.pool:
+            if connection.reader is None and connection.writer is None:
+                await connection.connect()
+                return connection
+        raise Exception("No available connections in the pool.")
+
+    def return_connection(self, connection):
+        """Return a connection to the pool."""
+        self.pool.append(connection)
+
 async def send_with_retry(module, signal_data, retries=3):
     for attempt in range(retries):
         try:
@@ -113,11 +141,8 @@ async def main():
     host = '192.168.1.100'
     port = 8080
 
-    esp8266 = ESP8266(host, port)
-    esp32 = ESP32(host, port)
-
-    await esp8266.connect()
-    await esp32.connect()
+    # Create a connection pool with 2 connections (4 modules)
+    pool = ConnectionPool(host, port, pool_size=2)
 
     try:
         while True:
@@ -125,13 +150,17 @@ async def main():
             signal_strength = get_real_signal_strength()
             signal_data = Signal(signal_strength)
 
+            # Get a connection from the pool
+            connection = await pool.get_connection()
+
             # Send signals with retry mechanism
-            await send_with_retry(esp8266, signal_data)
-            await send_with_retry(esp32, signal_data)
+            await send_with_retry(connection, signal_data)
 
             # Receive signals (asynchronous)
-            await esp8266.receive_signal()
-            await esp32.receive_signal()
+            await connection.receive_signal()
+
+            # Return the connection to the pool
+            pool.return_connection(connection)
 
             await asyncio.sleep(2)
 
@@ -140,10 +169,9 @@ async def main():
 
     finally:
         # Cleanup and close connections
-        if esp8266.writer:
-            esp8266.writer.close()
-        if esp32.writer:
-            esp32.writer.close()
+        for connection in pool.pool:
+            if connection.writer:
+                connection.writer.close()
         logging.info("Connections closed.")
 
 if __name__ == "__main__":

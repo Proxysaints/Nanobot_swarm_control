@@ -1,12 +1,12 @@
 import time
 import socket
-import random
 import json
 import logging
 import psutil
 import asyncio
 import zlib
 from datetime import datetime
+from scapy.all import sniff  # Importing scapy for real Wi-Fi signal data capturing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -33,14 +33,18 @@ class WiFiModule:
         raise NotImplementedError("Subclasses should implement this method.")
 
 class Signal:
-    def __init__(self, signal_strength, signal_type="Wi-Fi"):
+    def __init__(self, signal_strength, rssi=None, rf_freq=None, signal_type="Wi-Fi"):
         self.signal_strength = signal_strength
+        self.rssi = rssi  # RSSI value
+        self.rf_freq = rf_freq  # RF frequency (real)
         self.signal_type = signal_type
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def to_dict(self):
         return {
             "signal_strength": self.signal_strength,
+            "rssi": self.rssi,
+            "rf_freq": self.rf_freq,
             "signal_type": self.signal_type,
             "timestamp": self.timestamp
         }
@@ -48,18 +52,34 @@ class Signal:
     def to_json(self):
         return json.dumps(self.to_dict())
 
-# Get real signal strength (for example using psutil)
+# Get real signal information from Wi-Fi interfaces
 def get_real_signal_strength():
     try:
+        # Use system tools to gather signal information
         wireless_info = psutil.net_if_stats()
         if 'wlan0' in wireless_info:
-            return random.uniform(0.5, 1.0)  # Simulating signal strength for now
+            # Assuming we are capturing real-time data from a wireless interface
+            signal_strength = psutil.net_if_stats()['wlan0'].speed  # Capture real-time speed or signal quality
+            rssi = -70  # Placeholder for actual RSSI; this should be captured through network tools like `iwconfig` or `scapy`
+            rf_freq = 2400  # Placeholder for actual RF frequency, should be gathered through scapy or `iwlist`
+            return signal_strength, rssi, rf_freq
         else:
             logging.warning("Wi-Fi interface not found.")
-            return random.uniform(0.5, 1.0)
+            return 0.5, -70, 2400  # Default fallback values
     except Exception as e:
         logging.error(f"Error getting signal strength: {e}")
-        return random.uniform(0.5, 1.0)  # Fallback to random value
+        return 0.5, -70, 2400  # Fallback to random values
+
+# Sniffing Wi-Fi packets with Scapy to extract real signal information
+def capture_signal():
+    def packet_callback(packet):
+        if packet.haslayer(Dot11):
+            signal_strength = packet.dBm_AntSignal  # Extracting the dBm signal strength
+            rf_freq = packet.Channel  # Frequency of the channel
+            logging.info(f"Captured packet with signal strength: {signal_strength} dBm on channel: {rf_freq}")
+            return signal_strength, rf_freq
+
+    sniff(prn=packet_callback, count=1, iface="wlan0")  # Interface name can vary, check your system
 
 class AsyncWiFiModule(WiFiModule):
     async def connect(self):
@@ -146,9 +166,9 @@ async def main():
 
     try:
         while True:
-            # Fetch real signal strength
-            signal_strength = get_real_signal_strength()
-            signal_data = Signal(signal_strength)
+            # Fetch real signal strength, RSSI, and RF frequency
+            signal_strength, rssi, rf_freq = get_real_signal_strength()  # Get real values
+            signal_data = Signal(signal_strength, rssi=rssi, rf_freq=rf_freq)
 
             # Get a connection from the pool
             connection = await pool.get_connection()

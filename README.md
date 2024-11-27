@@ -34,3 +34,9 @@ Future Improvements:
     Integration of more advanced neural network models.   
 
 
+
+
+----
+mindmap
+
+----
